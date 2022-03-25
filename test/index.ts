@@ -22,6 +22,8 @@ function loadScript(url: string): Promise<void> {
   if (!edgeCompat) await loadScript('./open.js');
   await loadScript('./main.js');
   if (!edgeCompat) await loadScript('./iterate.js');
+  await loadScript('./sync-manager.js');
+  await loadScript('./live-query.js');
   await deleteDatabase();
   mocha.run();
 })();

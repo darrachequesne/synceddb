@@ -91,6 +91,8 @@ export default async function ({ watch }) {
         'test/main.ts',
         'test/open.ts',
         'test/iterate.ts',
+        'test/sync-manager.ts',
+        'test/live-query.ts',
       ],
       output: {
         dir: 'build/test',

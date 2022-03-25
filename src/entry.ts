@@ -1,4 +1,5 @@
 import { wrap } from './wrap-idb-value';
+import { LOCAL_CHANGES_STORE, LOCAL_OFFSETS_STORE } from './constants';
 
 export interface OpenDBCallbacks<DBTypes extends DBSchema | unknown> {
   /**
@@ -64,6 +65,18 @@ export function openDB<DBTypes extends DBSchema | unknown = unknown>(
           'versionchange'
         >,
       );
+      const db = request.result;
+      if (!db.objectStoreNames.contains(LOCAL_CHANGES_STORE)) {
+        const store = db.createObjectStore(LOCAL_CHANGES_STORE, {
+          autoIncrement: true,
+        });
+        store.createIndex('storeName, key', ['storeName', 'key'], {
+          unique: false,
+        });
+      }
+      if (!db.objectStoreNames.contains(LOCAL_OFFSETS_STORE)) {
+        db.createObjectStore(LOCAL_OFFSETS_STORE);
+      }
     });
   }
 

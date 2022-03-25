@@ -24,6 +24,15 @@ export interface TestDBSchema extends DBSchema {
   };
 }
 
+export interface CustomDBSchema extends TestDBSchema {
+  products: {
+    value: {
+      code: string;
+    };
+    key: string;
+  };
+}
+
 export const dbName = 'test-db';
 let version = 0;
 
@@ -43,6 +52,20 @@ export function openDBWithSchema(): Promise<IDBPDatabase<TestDBSchema>> {
       const store = db.createObjectStore('object-store', { keyPath: 'id' });
       store.createIndex('date', 'date');
       store.createIndex('title', 'title');
+    },
+  });
+}
+
+export function openDBWithCustomSchema(): Promise<
+  IDBPDatabase<CustomDBSchema>
+> {
+  if (dbWithSchemaCreated) return openDB(dbName, version);
+  dbWithSchemaCreated = true;
+  return openDB(dbName, getNextVersion(), {
+    upgrade(db) {
+      db.createObjectStore('key-val-store');
+      db.createObjectStore('object-store', { keyPath: 'id' });
+      db.createObjectStore('products', { keyPath: 'code' });
     },
   });
 }
@@ -87,4 +110,8 @@ export function deleteDatabase(callbacks: DeleteDBCallbacks = {}) {
   dbWithSchemaCreated = false;
   dbWithDataCreated = false;
   return deleteDB(dbName, callbacks);
+}
+
+export function sleep(duration: number) {
+  return new Promise((resolve) => setTimeout(resolve, duration));
 }

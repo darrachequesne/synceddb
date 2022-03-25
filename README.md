@@ -1,497 +1,504 @@
-# IndexedDB with usability.
+# IndexedDB with usability and remote syncing
 
-This is a tiny (~1.05k brotli'd) library that mostly mirrors the IndexedDB API, but with small improvements that make a big difference to usability.
+This is a fork of the awesome [`idb`](https://github.com/jakearchibald/idb) library, which adds the ability to sync an IndexedDB database with a remote REST API.
 
-1. [Installation](#installation)
-1. [Changes](#changes)
-1. [Browser support](#browser-support)
-1. [API](#api)
-   1. [`openDB`](#opendb)
-   1. [`deleteDB`](#deletedb)
-   1. [`unwrap`](#unwrap)
-   1. [`wrap`](#wrap)
-   1. [General enhancements](#general-enhancements)
-   1. [`IDBDatabase` enhancements](#idbdatabase-enhancements)
-   1. [`IDBTransaction` enhancements](#idbtransaction-enhancements)
-   1. [`IDBCursor` enhancements](#idbcursor-enhancements)
-   1. [Async iterators](#async-iterators)
-1. [Examples](#examples)
-1. [TypeScript](#typescript)
+1. [Features](#features)
+   1. [All the usability improvements from the `idb` library](#all-the-usability-improvements-from-the-idb-library) 
+   2. [Sync with a remote REST API](#sync-with-a-remote-rest-api)
+   3. [Auto-reloading queries](#auto-reloading-queries)
+2. [Limitations](#limitations)
+3. [Installation](#installation)
+4. [API](#api)
+   1. [SyncManager](#syncmanager)
+      1. [Options](#options)
+         1. [`fetchOptions`](#fetchoptions)
+         2. [`fetchInterval`](#fetchinterval)
+         3. [`buildFetchParams`](#buildfetchparams)
+         4. [`updatedAtAttribute`](#updatedatattribute)
+      2. [Methods](#methods)
+         1. [`start()`](#start)
+         2. [`stop()`](#stop)
+         3. [`clear()`](#clear)
+         4. [`hasLocalChanges()`](#haslocalchanges)
+         5. [`onfetchsuccess`](#onfetchsuccess)
+         6. [`onfetcherror`](#onfetcherror)
+         7. [`onpushsuccess`](#onpushsuccess)
+         8. [`onpusherror`](#onpusherror)
+   2. [LiveQuery](#livequery)
+      1. [Example with Vue.js](#example-with-vuejs)
+5. [Expectations for the REST API](#expectations-for-the-rest-api)
+   1. [Fetching changes](#fetching-changes)
+   2. [Pushing changes](#pushing-changes)
+6. [Alternatives](#alternatives)
+
+# Features
+
+## All the usability improvements from the `idb` library
+
+Since it is a fork of the [`idb`](https://github.com/jakearchibald/idb) library, `synceddb` shares the same Promise-based API:
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+
+const transaction = db.transaction('items', 'readwrite');
+await transaction.store.add({ id: 1, label: 'Dagger' });
+
+// short version
+await db.add('items', { id: 1, label: 'Dagger' });
+```
+
+More information [here](https://github.com/jakearchibald/idb#api).
+
+## Sync with a remote REST API
+
+Every change is tracked in a store. The [SyncManager](#syncmanager) then sync these changes with the remote REST API when the connection is available, making it easier to build offline-first applications.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.start();
+
+// will result in the following HTTP request: POST /items
+await db.add('items', { id: 1, label: 'Dagger' });
+
+// will result in the following HTTP request: DELETE /items/2
+await db.delete('items', 2);
+```
+
+See also: [Expectations for the REST API](#expectations-for-the-rest-api)
+
+## Auto-reloading queries
+
+The [LiveQuery](#livequery) provides a way to run a query every time the underlying stores are updated:
+
+```js
+import { openDB, LiveQuery } from 'synceddb';
+
+const db = await openDB('my awesome database');
+
+let result;
+
+const query = new LiveQuery(['items'], async () => {
+  // result will be updated every time the 'items' store is modified
+  result = await db.getAll('items');
+});
+
+// trigger the liveQuery
+await db.put('items', { id: 2, label: 'Long sword' });
+
+// or manually run it
+await query.run();
+```
+
+Inspired from [Dexie.js liveQuery](https://dexie.org/docs/liveQuery()).
+
+# Limitations
+
+- [out-of-line keys](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Basic_Terminology#out-of-line_key)
+
+Entities without `keyPath` are not currently supported.
 
 # Installation
 
-## Using npm
-
 ```sh
-npm install idb
+npm install synceddb
 ```
 
-Then, assuming you're using a module-compatible system (like webpack, Rollup etc):
+Then:
 
 ```js
-import { openDB, deleteDB, wrap, unwrap } from 'idb';
+import { openDB, SyncManager, LiveQuery } from 'synceddb';
 
 async function doDatabaseStuff() {
-  const db = await openDB(…);
+  const db = await openDB('my awesome database');
+
+  // sync your database with a remote server
+  const manager = new SyncManager(db, 'https://example.com');
+
+  manager.start();
+  
+  // create an auto-reloading query
+  let result;
+  const query = new LiveQuery(['items'], async () => {
+    // result will be updated every time the 'items' store is modified
+    result = await db.getAll('items');
+  });
 }
 ```
 
-## Directly in a browser
-
-### Using the modules method directly via jsdelivr:
-
-```html
-<script type="module">
-  import { openDB, deleteDB, wrap, unwrap } from 'https://cdn.jsdelivr.net/npm/idb@7/+esm';
-
-  async function doDatabaseStuff() {
-    const db = await openDB(…);
-  }
-</script>
-```
-
-### Using external script reference
-
-```html
-<script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
-<script>
-  async function doDatabaseStuff() {
-    const db = await idb.openDB(…);
-  }
-</script>
-```
-
-A global, `idb`, will be created, containing all exports of the module version.
-
-# Changes
-
-[See details of (potentially) breaking changes](CHANGELOG.md).
-
-# Browser support
-
-This library targets modern browsers, as in Chrome, Firefox, Safari, and other browsers that use those engines, such as Edge. IE is not supported.
-
-If you want to target much older versions of those browsers, you can transpile the library using something like [Babel](https://babeljs.io/). You can't transpile the library for IE, as it relies on a proper implementation of [JavaScript proxies](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy).
+# How it works
 
 # API
 
-## `openDB`
+For database-related operations, please see the `idb` [documentation](https://github.com/jakearchibald/idb#api).
 
-This method opens a database, and returns a promise for an enhanced [`IDBDatabase`](https://w3c.github.io/IndexedDB/#database-interface).
+## SyncManager
 
 ```js
-const db = await openDB(name, version, {
-  upgrade(db, oldVersion, newVersion, transaction) {
-    // …
-  },
-  blocked() {
-    // …
-  },
-  blocking() {
-    // …
-  },
-  terminated() {
-    // …
-  },
-});
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.start();
 ```
 
-- `name`: Name of the database.
-- `version` (optional): Schema version, or `undefined` to open the current version.
-- `upgrade` (optional): Called if this version of the database has never been opened before. Use it to specify the schema for the database. This is similar to the [`upgradeneeded` event](https://developer.mozilla.org/en-US/docs/Web/API/IDBOpenDBRequest/upgradeneeded_event) in plain IndexedDB.
-  - `db`: An enhanced `IDBDatabase`.
-  - `oldVersion`: Last version of the database opened by the user.
-  - `newVersion`: Whatever new version you provided.
-  - `transaction`: An enhanced transaction for this upgrade. This is useful if you need to get data from other stores as part of a migration.
-- `blocked` (optional): Called if there are older versions of the database open on the origin, so this version cannot open. This is similar to the [`blocked` event](https://developer.mozilla.org/en-US/docs/Web/API/IDBOpenDBRequest/blocked_event) in plain IndexedDB.
-- `blocking` (optional): Called if this connection is blocking a future version of the database from opening. This is similar to the [`versionchange` event](https://developer.mozilla.org/en-US/docs/Web/API/IDBDatabase/versionchange_event) in plain IndexedDB.
-- `terminated` (optional): Called if the browser abnormally terminates the connection, but not on regular closures like calling `db.close()`. This is similar to the [`close` event](https://developer.mozilla.org/en-US/docs/Web/API/IDBDatabase/close_event) in plain IndexedDB.
+### Options
 
-## `deleteDB`
+#### `fetchOptions`
 
-Deletes a database.
+Additional options for all HTTP requests.
 
 ```js
-await deleteDB(name, {
-  blocked() {
-    // …
-  },
-});
-```
-
-- `name`: Name of the database.
-- `blocked` (optional): Called if the database already exists and there are open connections that don’t close in response to a versionchange event, the request will be blocked until they all close.
-
-## `unwrap`
-
-Takes an enhanced IndexedDB object and returns the plain unmodified one.
-
-```js
-const unwrapped = unwrap(wrapped);
-```
-
-This is useful if, for some reason, you want to drop back into plain IndexedDB. Promises will also be converted back into `IDBRequest` objects.
-
-## `wrap`
-
-Takes an IDB object and returns a version enhanced by this library.
-
-```js
-const wrapped = wrap(unwrapped);
-```
-
-This is useful if some third party code gives you an `IDBDatabase` object and you want it to have the features of this library.
-
-This doesn't work with `IDBCursor`, [due to missing primitives](https://github.com/w3c/IndexedDB/issues/255). Also, if you wrap an `IDBTransaction`, `tx.store` and `tx.objectStoreNames` won't work in Edge. To avoid these issues, wrap the `IDBDatabase` object, and use the wrapped object to create a new transaction.
-
-## General enhancements
-
-Once you've opened the database the API is the same as IndexedDB, except for a few changes to make things easier.
-
-Firstly, any method that usually returns an `IDBRequest` object will now return a promise for the result.
-
-```js
-const store = db.transaction(storeName).objectStore(storeName);
-const value = await store.get(key);
-```
-
-### Promises & throwing
-
-The library turns all `IDBRequest` objects into promises, but it doesn't know in advance which methods may return promises.
-
-As a result, methods such as `store.put` may throw instead of returning a promise.
-
-If you're using async functions, there's no observable difference.
-
-### Transaction lifetime
-
-TL;DR: **Do not `await` other things between the start and end of your transaction**, otherwise the transaction will close before you're done.
-
-An IDB transaction auto-closes if it doesn't have anything left do once microtasks have been processed. As a result, this works fine:
-
-```js
-const tx = db.transaction('keyval', 'readwrite');
-const store = tx.objectStore('keyval');
-const val = (await store.get('counter')) || 0;
-await store.put(val + 1, 'counter');
-await tx.done;
-```
-
-But this doesn't:
-
-```js
-const tx = db.transaction('keyval', 'readwrite');
-const store = tx.objectStore('keyval');
-const val = (await store.get('counter')) || 0;
-// This is where things go wrong:
-const newVal = await fetch('/increment?val=' + val);
-// And this throws an error:
-await store.put(newVal, 'counter');
-await tx.done;
-```
-
-In this case, the transaction closes while the browser is fetching, so `store.put` fails.
-
-## `IDBDatabase` enhancements
-
-### Shortcuts to get/set from an object store
-
-It's common to create a transaction for a single action, so helper methods are included for this:
-
-```js
-// Get a value from a store:
-const value = await db.get(storeName, key);
-// Set a value in a store:
-await db.put(storeName, value, key);
-```
-
-The shortcuts are: `get`, `getKey`, `getAll`, `getAllKeys`, `count`, `put`, `add`, `delete`, and `clear`. Each method takes a `storeName` argument, the name of the object store, and the rest of the arguments are the same as the equivalent `IDBObjectStore` method.
-
-### Shortcuts to get from an index
-
-The shortcuts are: `getFromIndex`, `getKeyFromIndex`, `getAllFromIndex`, `getAllKeysFromIndex`, and `countFromIndex`.
-
-```js
-// Get a value from an index:
-const value = await db.getFromIndex(storeName, indexName, key);
-```
-
-Each method takes `storeName` and `indexName` arguments, followed by the rest of the arguments from the equivalent `IDBIndex` method.
-
-## `IDBTransaction` enhancements
-
-### `tx.store`
-
-If a transaction involves a single store, the `store` property will reference that store.
-
-```js
-const tx = db.transaction('whatever');
-const store = tx.store;
-```
-
-If a transaction involves multiple stores, `tx.store` is undefined, you need to use `tx.objectStore(storeName)` to get the stores.
-
-### `tx.done`
-
-Transactions have a `.done` promise which resolves when the transaction completes successfully, and otherwise rejects with the [transaction error](https://developer.mozilla.org/en-US/docs/Web/API/IDBTransaction/error).
-
-```js
-const tx = db.transaction(storeName, 'readwrite');
-await Promise.all([
-  tx.store.put('bar', 'foo'),
-  tx.store.put('world', 'hello'),
-  tx.done,
-]);
-```
-
-If you're writing to the database, `tx.done` is the signal that everything was successfully committed to the database. However, it's still beneficial to await the individual operations, as you'll see the error that caused the transaction to fail.
-
-## `IDBCursor` enhancements
-
-Cursor advance methods (`advance`, `continue`, `continuePrimaryKey`) return a promise for the cursor, or null if there are no further values to provide.
-
-```js
-let cursor = await db.transaction(storeName).store.openCursor();
-
-while (cursor) {
-  console.log(cursor.key, cursor.value);
-  cursor = await cursor.continue();
-}
-```
-
-## Async iterators
-
-Async iterator support isn't included by default (Edge doesn't support them). To include them, import `idb/with-async-ittr` instead of `idb` (this increases the library size to ~1.28k brotli'd):
-
-```js
-import { openDB } from 'idb/with-async-ittr';
-```
-
-Or `https://cdn.jsdelivr.net/npm/idb@7/build/umd-with-async-ittr.js` if you're using the non-module version.
-
-Now you can iterate over stores, indexes, and cursors:
-
-```js
-const tx = db.transaction(storeName);
-
-for await (const cursor of tx.store) {
-  // …
-}
-```
-
-Each yielded object is an `IDBCursor`. You can optionally use the advance methods to skip items (within an async iterator they return void):
-
-```js
-const tx = db.transaction(storeName);
-
-for await (const cursor of tx.store) {
-  console.log(cursor.value);
-  // Skip the next item
-  cursor.advance(2);
-}
-```
-
-If you don't manually advance the cursor, `cursor.continue()` is called for you.
-
-Stores and indexes also have an `iterate` method which has the same signature as `openCursor`, but returns an async iterator:
-
-```js
-const index = db.transaction('books').store.index('author');
-
-for await (const cursor of index.iterate('Douglas Adams')) {
-  console.log(cursor.value);
-}
-```
-
-# Examples
-
-## Keyval store
-
-This is very similar to `localStorage`, but async. If this is _all_ you need, you may be interested in [idb-keyval](https://www.npmjs.com/package/idb-keyval). You can always upgrade to this library later.
-
-```js
-import { openDB } from 'idb';
-
-const dbPromise = openDB('keyval-store', 1, {
-  upgrade(db) {
-    db.createObjectStore('keyval');
-  },
-});
-
-export async function get(key) {
-  return (await dbPromise).get('keyval', key);
-};
-export async function set(key, val) {
-  return (await dbPromise).put('keyval', val, key);
-};
-export async function del(key) {
-  return (await dbPromise).delete('keyval', key);
-};
-export async function clear() {
-  return (await dbPromise).clear('keyval');
-};
-export async function keys() {
-  return (await dbPromise).getAllKeys('keyval');
-};
-```
-
-## Article store
-
-```js
-import { openDB } from 'idb/with-async-ittr.js';
-
-async function demo() {
-  const db = await openDB('Articles', 1, {
-    upgrade(db) {
-      // Create a store of objects
-      const store = db.createObjectStore('articles', {
-        // The 'id' property of the object will be the key.
-        keyPath: 'id',
-        // If it isn't explicitly set, create a value by auto incrementing.
-        autoIncrement: true,
-      });
-      // Create an index on the 'date' property of the objects.
-      store.createIndex('date', 'date');
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com', {
+  fetchOptions: {
+    headers: {
+      'accept': 'application/json'
     },
-  });
-
-  // Add an article:
-  await db.add('articles', {
-    title: 'Article 1',
-    date: new Date('2019-01-01'),
-    body: '…',
-  });
-
-  // Add multiple articles in one transaction:
-  {
-    const tx = db.transaction('articles', 'readwrite');
-    await Promise.all([
-      tx.store.add({
-        title: 'Article 2',
-        date: new Date('2019-01-01'),
-        body: '…',
-      }),
-      tx.store.add({
-        title: 'Article 3',
-        date: new Date('2019-01-02'),
-        body: '…',
-      }),
-      tx.done,
-    ]);
+    credentials: 'include'
   }
+});
 
-  // Get all the articles in date order:
-  console.log(await db.getAllFromIndex('articles', 'date'));
+manager.start();
+```
 
-  // Add 'And, happy new year!' to all articles on 2019-01-01:
-  {
-    const tx = db.transaction('articles', 'readwrite');
-    const index = tx.store.index('date');
+Reference: https://developer.mozilla.org/en-US/docs/Web/API/fetch
 
-    for await (const cursor of index.iterate(new Date('2019-01-01'))) {
-      const article = { ...cursor.value };
-      article.body += ' And, happy new year!';
-      cursor.update(article);
+#### `fetchInterval`
+
+The number of ms between two fetch requests for a given store.
+
+Default value: `30000`
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com', {
+  fetchInterval: 10000
+});
+
+manager.start();
+```
+
+#### `buildPath`
+
+A function that allows to override the request path for a given request.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com', {
+  buildPath: (operation, storeName, key) => {
+    if (storeName === 'my-local-store') {
+      if (key) {
+        return `/the-remote-store/${key[1]}`;
+      } else {
+        return '/the-remote-store/';
+      }
     }
+    // defaults to `/${storeName}/${key}`
+  }
+});
 
-    await tx.done;
+manager.start();
+```
+
+#### `buildFetchParams`
+
+A function that allows to override the query params of the fetch requests.
+
+Defaults to `?sort=updated_at:asc&size=100&after=2000-01-01T00:00:00.000Z,123`.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com', {
+  buildFetchParams: (storeName, offset) => {
+    const searchParams = new URLSearchParams({
+      sort: '+updatedAt',
+      size: '10',
+    });
+    if (offset) {
+      searchParams.append('after', `${offset.updatedAt}+${offset.id}`);
+    }
+    return searchParams;
+  }
+});
+
+manager.start();
+```
+
+#### `updatedAtAttribute`
+
+The name of the attribute that indicates the last updated date of the entity.
+
+Default value: `updatedAt`
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com', {
+  updatedAtAttribute: 'lastUpdateDate'
+});
+
+manager.start();
+```
+
+### Methods
+
+#### `start()`
+
+Starts the sync process with the remote server.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.start();
+```
+
+#### `stop()`
+
+Stops the sync process.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.stop();
+```
+
+#### `clear()`
+
+Clears the local stores.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.clear();
+```
+
+#### `hasLocalChanges()`
+
+Returns whether a given entity currently has local changes that are not synced yet.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+await db.put('items', { id: 1 });
+
+const hasLocalChanges = await manager.hasLocalChanges('items', 1); // true
+```
+
+#### `onfetchsuccess`
+
+Called after some entities are successfully fetched from the remote server.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.onfetchsuccess = (storeName, entities, hasMore) => {
+  // ...
+}
+```
+
+#### `onfetcherror`
+
+Called when something goes wrong when fetching the changes from the remote server.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.onfetcherror = (err) => {
+  // ...
+}
+```
+
+#### `onpushsuccess`
+
+Called after a change is successfully pushed to the remote server.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.onpushsuccess = ({ operation, storeName, key, value }) => {
+  // ...
+}
+```
+
+#### `onpusherror`
+
+Called when something goes wrong when pushing a change to the remote server.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com');
+
+manager.onpusherror = (change, response, retryAfter, discardLocalChange, overrideRemoteChange) => {
+  // this is the default implementation
+  switch (response.status) {
+    case 403:
+    case 404:
+      return discardLocalChange();
+    case 409:
+      // last write wins by default
+      response.json().then((content) => {
+        const version = content[VERSION_ATTRIBUTE];
+        change.value[VERSION_ATTRIBUTE] = version + 1;
+        overrideRemoteChange(change.value);
+      });
+      break;
+    default:
+      return retryAfter(DEFAULT_RETRY_DELAY);
   }
 }
 ```
 
-# TypeScript
+## LiveQuery
 
-This library is fully typed, and you can improve things by providing types for your database:
+The first argument is an array of stores. Every time one of these stores is updated, the function provided in the 2nd argument will be called.
 
-```ts
-import { openDB, DBSchema } from 'idb';
+```js
+import { openDB, LiveQuery } from 'synceddb';
 
-interface MyDB extends DBSchema {
-  'favourite-number': {
-    key: string;
-    value: number;
-  };
-  products: {
-    value: {
-      name: string;
-      price: number;
-      productCode: string;
-    };
-    key: string;
-    indexes: { 'by-price': number };
-  };
-}
+const db = await openDB('my awesome database');
 
-async function demo() {
-  const db = await openDB<MyDB>('my-db', 1, {
-    upgrade(db) {
-      db.createObjectStore('favourite-number');
+let result;
 
-      const productStore = db.createObjectStore('products', {
-        keyPath: 'productCode',
-      });
-      productStore.createIndex('by-price', 'price');
-    },
-  });
-
-  // This works
-  await db.put('favourite-number', 7, 'Jen');
-  // This fails at compile time, as the 'favourite-number' store expects a number.
-  await db.put('favourite-number', 'Twelve', 'Jake');
-}
-```
-
-To define types for your database, extend `DBSchema` with an interface where the keys are the names of your object stores.
-
-For each value, provide an object where `value` is the type of values within the store, and `key` is the type of keys within the store.
-
-Optionally, `indexes` can contain a map of index names, to the type of key within that index.
-
-Provide this interface when calling `openDB`, and from then on your database will be strongly typed. This also allows your IDE to autocomplete the names of stores and indexes.
-
-## Opting out of types
-
-If you call `openDB` without providing types, your database will use basic types. However, sometimes you'll need to interact with stores that aren't in your schema, perhaps during upgrades. In that case you can cast.
-
-Let's say we were renaming the 'favourite-number' store to 'fave-nums':
-
-```ts
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
-
-interface MyDBV1 extends DBSchema {
-  'favourite-number': { key: string; value: number };
-}
-
-interface MyDBV2 extends DBSchema {
-  'fave-num': { key: string; value: number };
-}
-
-const db = await openDB<MyDBV2>('my-db', 2, {
-  async upgrade(db, oldVersion) {
-    // Cast a reference of the database to the old schema.
-    const v1Db = db as unknown as IDBPDatabase<MyDBV1>;
-
-    if (oldVersion < 1) {
-      v1Db.createObjectStore('favourite-number');
-    }
-    if (oldVersion < 2) {
-      const store = v1Db.createObjectStore('favourite-number');
-      store.name = 'fave-num';
-    }
-  },
+const query = new LiveQuery(['items'], async () => {
+  // result will be updated every time the 'items' store is modified
+  result = await db.getAll('items');
 });
 ```
 
-You can also cast to a typeless database by omitting the type, eg `db as IDBPDatabase`.
+### Example with Vue.js
 
-Note: Types like `IDBPDatabase` are used by TypeScript only. The implementation uses proxies under the hood.
+```vue
+<script>
+import { openDB, LiveQuery } from 'synceddb';
 
-# Developing
-
-```sh
-npm run dev
+export default {
+  data() {
+    return {
+      items: []
+    }
+  },
+  
+  async created() {
+    const db = await openDB('test', 1, {
+      upgrade(db) {
+        db.createObjectStore('items', { keyPath: 'id' });
+      },
+    });
+    
+    this.query = new LiveQuery(['items'], async () => {
+      this.items = await db.getAll();
+    });
+  },
+  
+  unmounted() {
+    // !!! IMPORTANT !!! This ensures the query stops listening to the database updates and does not leak memory.
+    this.query.close();
+  }
+}
+</script>
 ```
 
-This will also perform type testing.
+# Expectations for the REST API
 
-To test, navigate to `build/test/` in a browser. You'll need to set up a [basic web server](https://www.npmjs.com/package/serve) for this.
+## Fetching changes
+
+Changes are fetched from the REST API with `GET` requests:
+
+```
+GET /<storeName>?sort=updated_at:asc&size=100&after=2000-01-01T00:00:00.000Z,123
+```
+
+Explanations:
+
+- `sort=updated_at:asc` indicates that we want to sort the entities based on the date of last update
+- `size=100` indicates that we want 100 entities max
+- `after=2000-01-01T00:00:00.000Z,123` indicates the offset (with an update date above `2000-01-01T00:00:00.000Z`, excluding the entity `123`)
+
+The query parameters can be customized with the [`buildFetchParams`](#buildfetchparams) option.
+
+Expected response:
+
+```js
+{
+  data: [
+    {
+      id: 1,
+      version: 1,
+      updatedAt: '2000-01-01T00:00:00.000Z',
+      label: 'Dagger'
+    },
+    {
+      id: 2,
+      version: 12,
+      updatedAt: '2000-01-02T00:00:00.000Z',
+      label: 'Long sword'
+    },
+    {
+      id: 3,
+      version: -1, // tombstone
+      updatedAt: '2000-01-03T00:00:00.000Z',
+    }
+  ],
+  hasMore: true
+}
+```
+
+A fetch request will be sent for each store of the database, every X seconds (see the [fetchInterval](#fetchinterval) option).
+
+## Pushing changes
+
+| Operation                                                     | HTTP request                  | Body                                         |
+|---------------------------------------------------------------|-------------------------------|----------------------------------------------|
+| `db.add('items', { id: 1, label: 'Dagger' })`                 | `POST /items`                 | `{ id: 1, version: 1, label: 'Dagger' }`     |
+| `db.put('items', { id: 2, version: 2, label: 'Long sword' })` | `PUT /items/2`                | `{ id: 2, version: 3, label: 'Long sword' }` |
+| `db.delete('items', 3)`                                       | `DELETE /items/3`             |                                              |
+| `db.clear('items')`                                           | one `DELETE` request per item |                                              |
+
+Success must be indicated by an HTTP 2xx response. Any other response status means the change was not properly synced. You can customize the error handling behavior with the [`onpusherror`](#onpusherror) method.
+
+# Alternatives
+
+Here are some alternatives that you might find interesting:
+
+- idb: https://github.com/jakearchibald/idb
+- Dexie.js: https://dexie.org/ (and its [ISyncProtocol](https://dexie.org/docs/Syncable/Dexie.Syncable.ISyncProtocol) part)
+- pouchdb: https://pouchdb.com/

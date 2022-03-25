@@ -7,6 +7,13 @@ import {
   IDBPTransaction,
 } from './entry';
 import { Constructor, Func, instanceOfAny } from './util';
+import {
+  LOCAL_CHANGES_STORE,
+  IGNORED_STORES,
+  VERSION_ATTRIBUTE,
+  CHANGE_EVENT_NAME,
+  BROADCAST_CHANNEL_NAME,
+} from './constants';
 
 let idbProxyableTypes: Constructor[];
 let cursorAdvanceMethods: Func[];
@@ -37,10 +44,37 @@ function getCursorAdvanceMethods(): Func[] {
   );
 }
 
-const cursorRequestMap: WeakMap<IDBPCursor, IDBRequest<IDBCursor>> =
-  new WeakMap();
-const transactionDoneMap: WeakMap<IDBTransaction, Promise<void>> =
-  new WeakMap();
+const writeMethods = [
+  IDBObjectStore.prototype.add,
+  IDBObjectStore.prototype.put,
+  IDBObjectStore.prototype.delete,
+  IDBObjectStore.prototype.clear,
+];
+
+export class UpdateEvent extends Event {
+  constructor(readonly impactedStores: string[]) {
+    super(CHANGE_EVENT_NAME);
+  }
+}
+
+let channel: BroadcastChannel;
+
+if (typeof BroadcastChannel === 'function') {
+  channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+  channel.onmessage = (evt) => {
+    const impactedStores = evt.data as string[];
+    dispatchEvent(new UpdateEvent(impactedStores));
+  };
+}
+
+const cursorRequestMap: WeakMap<
+  IDBPCursor,
+  IDBRequest<IDBCursor>
+> = new WeakMap();
+const transactionDoneMap: WeakMap<
+  IDBTransaction,
+  Promise<void>
+> = new WeakMap();
 const transactionStoreNamesMap: WeakMap<IDBTransaction, string[]> =
   new WeakMap();
 const transformCache = new WeakMap();
@@ -122,9 +156,20 @@ let idbProxyTraps: ProxyHandler<any> = {
       }
       // Make tx.store return the only store in the transaction, or undefined if there are many.
       if (prop === 'store') {
-        return receiver.objectStoreNames[1]
-          ? undefined
-          : receiver.objectStore(receiver.objectStoreNames[0]);
+        const storeNames = receiver.objectStoreNames;
+        if (storeNames.length === 1) {
+          return receiver.objectStore(storeNames[0]);
+        } else if (
+          storeNames.length === 2 &&
+          storeNames.contains(LOCAL_CHANGES_STORE)
+        ) {
+          for (let storeName of storeNames) {
+            if (storeName !== LOCAL_CHANGES_STORE) {
+              return receiver.objectStore(storeName);
+            }
+          }
+        }
+        return undefined;
       }
     }
     // Else transform whatever we get back.
@@ -189,6 +234,71 @@ function wrapFunction<T extends Func>(func: T): Function {
   }
 
   return function (this: any, ...args: Parameters<T>) {
+    if (func === IDBDatabase.prototype.transaction && args[1] === 'readwrite') {
+      if (!Array.isArray(args[0])) {
+        args[0] = [args[0]];
+      }
+      // transform `db.transaction("my-store", "readwrite")` into `db.transaction(["my-store", "_local_changes"], "readwrite")`
+      args[0].push(LOCAL_CHANGES_STORE);
+      // @ts-ignore
+      const transaction = wrap(
+        func.apply(unwrap(this), args),
+      ) as IDBPTransaction;
+      transaction.done.then(() => {
+        const impactedStores = Array.from(transaction.objectStoreNames);
+        // notify LiveQueries in the same browser tab
+        dispatchEvent(new UpdateEvent(impactedStores));
+        // notify other browser tabs
+        channel?.postMessage(impactedStores);
+      });
+      return transaction;
+    }
+    // track any update into the _local_changes store
+    if (writeMethods.includes(func)) {
+      const storeName = this.name;
+      // updates from the server are not tracked, i.e. `store.add(value, key, true)` or `store.delete(key, true)`
+      const isUpdateIgnored =
+        args.length === 3 ||
+        (args.length === 2 && func === IDBObjectStore.prototype.delete);
+      if (!IGNORED_STORES.includes(storeName) && !isUpdateIgnored) {
+        const store = this.transaction.objectStore(
+          LOCAL_CHANGES_STORE,
+        ) as IDBObjectStore;
+        const change: any = {
+          operation: func.name,
+          storeName,
+        };
+
+        switch (func) {
+          case IDBObjectStore.prototype.clear:
+            change.operation = 'delete';
+            this.getAllKeys().then((keys: IDBValidKey[]) => {
+              keys.forEach((key) => {
+                change.key = key;
+                store.add(change);
+              });
+            });
+            break;
+
+          case IDBObjectStore.prototype.delete:
+            change.key = args[0];
+            store.add(change);
+            break;
+
+          default:
+            // add or put
+            const value = args[0];
+            const key = args[1] || value[this.keyPath];
+            if (typeof value === 'object') {
+              value[VERSION_ATTRIBUTE] = (value[VERSION_ATTRIBUTE] || 0) + 1;
+            }
+            change.key = key;
+            change.value = value; // store the full entity
+            store.add(change);
+            break;
+        }
+      }
+    }
     // Calling the original function with the proxy as 'this' causes ILLEGAL INVOCATION, so we use
     // the original object.
     return wrap(func.apply(unwrap(this), args));

@@ -49,7 +49,7 @@ export default async function ({ watch }) {
       file: 'build/umd.js',
       format: 'umd',
       esModule: false,
-      name: 'idb',
+      name: 'synceddb',
     },
   });
 
@@ -65,7 +65,7 @@ export default async function ({ watch }) {
       file: 'build/umd-with-async-ittr.js',
       format: 'umd',
       esModule: false,
-      name: 'idb',
+      name: 'synceddb',
     },
   });
 

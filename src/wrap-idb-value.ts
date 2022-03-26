@@ -234,7 +234,11 @@ function wrapFunction<T extends Func>(func: T): Function {
   }
 
   return function (this: any, ...args: Parameters<T>) {
-    if (func === IDBDatabase.prototype.transaction && args[1] === 'readwrite') {
+    if (
+      func === IDBDatabase.prototype.transaction &&
+      args[1] === 'readwrite' &&
+      args[0] !== LOCAL_CHANGES_STORE
+    ) {
       if (!Array.isArray(args[0])) {
         args[0] = [args[0]];
       }

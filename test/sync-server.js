@@ -44,6 +44,7 @@ const server = createServer(async (req, res) => {
   switch (req.method) {
     case 'OPTIONS':
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       res.writeHead(204).end();
       break;
     case 'GET':

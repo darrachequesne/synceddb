@@ -441,11 +441,16 @@ class PushLoop extends Loop {
 
     let response;
     try {
-      response = await fetch(url, {
+      const options = {
         method,
-        body: value ? JSON.stringify(value) : undefined,
+        headers: {},
         ...this.opts.fetchOptions,
-      });
+      }
+      if (value) {
+        options.body = JSON.stringify(value);
+        options.headers['Content-Type'] = 'application/json';
+      }
+      response = await fetch(url, options);
     } catch (e) {
       return retryAfter(DEFAULT_RETRY_DELAY);
     }

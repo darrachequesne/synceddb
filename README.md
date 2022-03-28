@@ -2,11 +2,19 @@
 
 This is a fork of the awesome [`idb`](https://github.com/jakearchibald/idb) library, which adds the ability to sync an IndexedDB database with a remote REST API.
 
+![Video of two clients syncing their IndexedDB database](assets/demo.gif)
+
+The source code for the example above can be found [here](https://github.com/darrachequesne/synceddb-todo-example).
+
+Bundle size: ~3.11 kB brotli'd
+
+**Table of content**
+
 1. [Features](#features)
    1. [All the usability improvements from the `idb` library](#all-the-usability-improvements-from-the-idb-library) 
    2. [Sync with a remote REST API](#sync-with-a-remote-rest-api)
    3. [Auto-reloading queries](#auto-reloading-queries)
-2. [Limitations](#limitations)
+2. [Disclaimer](#disclaimer)
 3. [Installation](#installation)
 4. [API](#api)
    1. [SyncManager](#syncmanager)
@@ -97,11 +105,19 @@ await query.run();
 
 Inspired from [Dexie.js liveQuery](https://dexie.org/docs/liveQuery()).
 
-# Limitations
+# Disclaimer
 
 - [out-of-line keys](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Basic_Terminology#out-of-line_key)
 
 Entities without `keyPath` are not currently supported.
+
+- no version history
+
+Only the last version of each entity is kept on the client side.
+
+- basic conflict management
+
+The last write wins (though you can customize the behavior in the [`onpusherror`](#onpusherror) handler).
 
 # Installation
 
@@ -130,8 +146,6 @@ async function doDatabaseStuff() {
   });
 }
 ```
-
-# How it works
 
 # API
 
@@ -425,7 +439,7 @@ export default {
     });
     
     this.query = new LiveQuery(['items'], async () => {
-      this.items = await db.getAll();
+      this.items = await db.getAll('items');
     });
   },
   
@@ -486,6 +500,8 @@ A fetch request will be sent for each store of the database, every X seconds (se
 
 ## Pushing changes
 
+Each successful readwrite transaction will be translated into an HTTP request, when the connection is available:
+
 | Operation                                                     | HTTP request                  | Body                                         |
 |---------------------------------------------------------------|-------------------------------|----------------------------------------------|
 | `db.add('items', { id: 1, label: 'Dagger' })`                 | `POST /items`                 | `{ id: 1, version: 1, label: 'Dagger' }`     |
@@ -495,6 +511,8 @@ A fetch request will be sent for each store of the database, every X seconds (se
 
 Success must be indicated by an HTTP 2xx response. Any other response status means the change was not properly synced. You can customize the error handling behavior with the [`onpusherror`](#onpusherror) method.
 
+Please see the Express server [there](https://github.com/darrachequesne/synceddb-todo-example/blob/main/express-server/index.js) for reference.
+
 # Alternatives
 
 Here are some alternatives that you might find interesting:
@@ -502,3 +520,5 @@ Here are some alternatives that you might find interesting:
 - idb: https://github.com/jakearchibald/idb
 - Dexie.js: https://dexie.org/ (and its [ISyncProtocol](https://dexie.org/docs/Syncable/Dexie.Syncable.ISyncProtocol) part)
 - pouchdb: https://pouchdb.com/
+- Automerge: https://github.com/automerge/automerge
+- Yjs: https://github.com/yjs/yjs

@@ -328,7 +328,7 @@ class FetchLoop extends Loop {
         }
       }
     } catch (e) {
-      this.manager.onfetcherror(e);
+      this.manager.onfetcherror(e as Error);
     }
 
     setTimeout(() => this.run(), this.opts.fetchInterval);
@@ -349,7 +349,7 @@ class FetchLoop extends Loop {
         ...this.opts.fetchOptions,
       });
     } catch (e) {
-      throw new FetchError(e.message);
+      throw new FetchError((e as Error).message);
     }
 
     if (!response.ok) {
@@ -430,7 +430,7 @@ class FetchLoop extends Loop {
         ...this.opts.fetchOptions,
       });
     } catch (e) {
-      throw new FetchError(e.message);
+      throw new FetchError((e as Error).message);
     }
 
     if (!response.ok) {

@@ -1,11 +1,11 @@
-import { IDBPDatabase } from './entry';
+import { IDBPDatabase } from './entry.js';
 import {
   LOCAL_OFFSETS_STORE,
   IGNORED_STORES,
   LOCAL_CHANGES_STORE,
   VERSION_ATTRIBUTE,
   CHANGE_EVENT_NAME,
-} from './constants';
+} from './constants.js';
 
 const OPERATION_TO_METHOD = new Map([
   ['add', 'POST'],

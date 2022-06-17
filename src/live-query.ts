@@ -1,5 +1,5 @@
-import { CHANGE_EVENT_NAME } from './constants';
-import { UpdateEvent } from './wrap-idb-value';
+import { CHANGE_EVENT_NAME } from './constants.js';
+import { UpdateEvent } from './wrap-idb-value.js';
 
 function noop() {}
 

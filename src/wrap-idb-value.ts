@@ -5,15 +5,15 @@ import {
   IDBPIndex,
   IDBPObjectStore,
   IDBPTransaction,
-} from './entry';
-import { Constructor, Func, instanceOfAny } from './util';
+} from './entry.js';
+import { Constructor, Func, instanceOfAny } from './util.js';
 import {
   LOCAL_CHANGES_STORE,
   IGNORED_STORES,
   VERSION_ATTRIBUTE,
   CHANGE_EVENT_NAME,
   BROADCAST_CHANNEL_NAME,
-} from './constants';
+} from './constants.js';
 
 let idbProxyableTypes: Constructor[];
 let cursorAdvanceMethods: Func[];

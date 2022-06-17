@@ -1,4 +1,4 @@
-export * from './entry';
-import './database-extras';
-export { SyncManager } from './sync-manager';
-export { LiveQuery } from './live-query';
+export * from './entry.js';
+import './database-extras.js';
+export { SyncManager } from './sync-manager.js';
+export { LiveQuery } from './live-query.js';

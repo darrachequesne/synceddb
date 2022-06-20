@@ -115,10 +115,3 @@ export function deleteDatabase(callbacks: DeleteDBCallbacks = {}) {
 export function sleep(duration: number) {
   return new Promise((resolve) => setTimeout(resolve, duration));
 }
-
-// This is used in cases where IsExact causes infinite recursion.
-export type SimpleIsExact<T, U> = T extends U
-  ? U extends T
-    ? true
-    : false
-  : false;

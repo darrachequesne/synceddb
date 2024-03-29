@@ -33,7 +33,8 @@ Bundle size: ~3.11 kB brotli'd
          7. [`onpushsuccess`](#onpushsuccess)
          8. [`onpusherror`](#onpusherror)
    2. [LiveQuery](#livequery)
-      1. [Example with Vue.js](#example-with-vuejs)
+      1. [Example with React](#example-with-react)
+      2. [Example with Vue.js](#example-with-vuejs)
 5. [Expectations for the REST API](#expectations-for-the-rest-api)
    1. [Fetching changes](#fetching-changes)
    2. [Pushing changes](#pushing-changes)
@@ -418,36 +419,69 @@ const query = new LiveQuery(['items'], async () => {
 });
 ```
 
-### Example with Vue.js
+### Example with React
 
-```vue
-<script>
+```js
 import { openDB, LiveQuery } from 'synceddb';
+import { useEffect, useState } from 'react';
 
-export default {
-  data() {
-    return {
-      items: []
-    }
-  },
-  
-  async created() {
-    const db = await openDB('test', 1, {
+export default function MyComponent() {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    let query;
+
+    openDB('test', 1, {
       upgrade(db) {
         db.createObjectStore('items', { keyPath: 'id' });
       },
+    }).then(db => {
+      query = new LiveQuery(['items'], async () => {
+        setItems(await db.getAll('items'));
+      });
+
+      query.run();
     });
-    
-    this.query = new LiveQuery(['items'], async () => {
-      this.items = await db.getAll('items');
-    });
-  },
-  
-  unmounted() {
-    // !!! IMPORTANT !!! This ensures the query stops listening to the database updates and does not leak memory.
-    this.query.close();
-  }
+
+    return () => {
+      // !!! IMPORTANT !!! This ensures the query stops listening to the database updates and does not leak memory.
+      query?.close();
+    }
+  }, []);
+
+  return (
+    <div>
+      <!-- ... -->
+    </div>
+  );
 }
+```
+
+### Example with Vue.js
+
+```vue
+<script setup>
+import { openDB, LiveQuery } from 'synceddb';
+import { ref, onBeforeUnmount } from 'vue';
+
+const items = ref([]);
+
+const db = await openDB('test', 1, {
+  upgrade(db) {
+    db.createObjectStore('items', { keyPath: 'id' });
+  },
+})
+
+const query = new LiveQuery(['items'], async () => {
+  items.value = await db.getAll('items');
+});
+
+await query.run();
+
+onBeforeUnmount(() => {
+  // !!! IMPORTANT !!! This ensures the query stops listening to the database updates and does not leak memory.
+  query.close();
+});
 </script>
 ```
 

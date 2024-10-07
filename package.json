@@ -1,6 +1,6 @@
 {
   "name": "synceddb",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Sync your IndexedDB database with a remote REST API",
   "main": "./build/index.cjs",
   "module": "./build/index.js",

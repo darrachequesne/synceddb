@@ -108,10 +108,6 @@ Inspired from [Dexie.js liveQuery](https://dexie.org/docs/liveQuery()).
 
 # Disclaimer
 
-- [out-of-line keys](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Basic_Terminology#out-of-line_key)
-
-Entities without `keyPath` are not currently supported.
-
 - no version history
 
 Only the last version of each entity is kept on the client side.
@@ -492,14 +488,14 @@ onBeforeUnmount(() => {
 Changes are fetched from the REST API with `GET` requests:
 
 ```
-GET /<storeName>?sort=updated_at:asc&size=100&after=2000-01-01T00:00:00.000Z,123
+GET /<storeName>?sort=updated_at:asc&size=100&after=2000-01-01T00:00:00.000Z&after_id=123
 ```
 
 Explanations:
 
 - `sort=updated_at:asc` indicates that we want to sort the entities based on the date of last update
 - `size=100` indicates that we want 100 entities max
-- `after=2000-01-01T00:00:00.000Z,123` indicates the offset (with an update date above `2000-01-01T00:00:00.000Z`, excluding the entity `123`)
+- `after=2000-01-01T00:00:00.000Z&after_id=123` indicates the offset (with an update date above `2000-01-01T00:00:00.000Z`, excluding the entity `123`)
 
 The query parameters can be customized with the [`buildFetchParams`](#buildfetchparams) option.
 

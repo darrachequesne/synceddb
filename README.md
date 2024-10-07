@@ -6,7 +6,7 @@ This is a fork of the awesome [`idb`](https://github.com/jakearchibald/idb) libr
 
 The source code for the example above can be found [here](https://github.com/darrachequesne/synceddb-todo-example).
 
-Bundle size: ~3.11 kB brotli'd
+Bundle size: ~3.26 kB brotli'd
 
 **Table of content**
 
@@ -23,6 +23,7 @@ Bundle size: ~3.11 kB brotli'd
          2. [`fetchInterval`](#fetchinterval)
          3. [`buildFetchParams`](#buildfetchparams)
          4. [`updatedAtAttribute`](#updatedatattribute)
+         4. [`withoutKeyPath`](#withoutkeypath)
       2. [Methods](#methods)
          1. [`start()`](#start)
          2. [`stop()`](#stop)
@@ -265,6 +266,37 @@ const manager = new SyncManager(db, 'https://example.com', {
 });
 
 manager.start();
+```
+
+#### `withoutKeyPath`
+
+List entities from object stores without `keyPath`.
+
+```js
+import { openDB, SyncManager } from 'synceddb';
+
+const db = await openDB('my-awesome-database');
+const manager = new SyncManager(db, 'https://example.com', {
+  withoutKeyPath: {
+    common: [
+      'user',
+      'settings'
+    ]
+  },
+  buildPath: (_operation, storeName, key) => {
+    if (storeName === 'common') {
+      if (key === 'user') {
+        return '/me';
+      } else if (key === 'settings') {
+        return '/settings';
+      }
+    }
+  }
+});
+
+manager.start();
+
+await db.put('common', { firstName: 'john' }, 'user');
 ```
 
 ### Methods

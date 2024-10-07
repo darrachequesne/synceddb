@@ -41,6 +41,21 @@ const server = createServer(async (req, res) => {
 
   console.log(`${req.method} ${req.url}`);
 
+  const url = new URL(`http://localhost${req.url}`);
+
+  if (req.method === 'GET' && url.pathname === '/key-val-store/foo') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.write(
+      JSON.stringify({
+        version: 1,
+        label: 'bar',
+      }),
+    );
+    return res.end();
+  } else if (req.method === 'PUT' && url.pathname === '/key-val-store/foo') {
+    return res.writeHead(204).end();
+  }
+
   switch (req.method) {
     case 'OPTIONS':
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE');

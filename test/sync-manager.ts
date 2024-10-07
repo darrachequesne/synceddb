@@ -12,20 +12,20 @@ const BASE_URL = 'http://localhost:4000';
 const NO_TRACKING_FLAG = true;
 
 async function waitForFetchSuccess(manager: SyncManager, count: number = 1) {
-  return new Promise<void>((resolve) => {
-    manager.onfetchsuccess = () => {
+  return new Promise<any[]>((resolve) => {
+    manager.onfetchsuccess = (_storeName, entities) => {
       if (--count === 0) {
-        resolve();
+        resolve(entities);
       }
     };
   });
 }
 
 async function waitForPushSuccess(manager: SyncManager, count: number = 1) {
-  return new Promise<void>((resolve) => {
-    manager.onpushsuccess = () => {
+  return new Promise<any>((resolve) => {
+    manager.onpushsuccess = (change) => {
       if (--count === 0) {
-        resolve();
+        resolve(change);
       }
     };
   });
@@ -102,7 +102,7 @@ suite.only('SyncManager', () => {
       });
 
       manager.start();
-      await waitForFetchSuccess(manager);
+      await waitForPushSuccess(manager);
 
       const item = await db.get('object-store', 2);
 
@@ -173,6 +173,40 @@ suite.only('SyncManager', () => {
       assert.deepEqual(offset, {
         id: '456',
         updatedAt: '2000-02-02T00:00:00.000Z',
+      });
+    });
+
+    test('without keyPath', async () => {
+      const schemaDB = await openDBWithSchema();
+      db = schemaDB as IDBPDatabase;
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': ['foo'],
+        },
+        buildPath: (_operation, storeName, key) => {
+          if (storeName === 'key-val-store') {
+            return `/${storeName}/${key}`;
+          }
+          return;
+        },
+      });
+
+      manager.start();
+
+      await waitForFetchSuccess(manager); // object-store
+      const items = await waitForFetchSuccess(manager);
+
+      assert.equal(items.length, 1);
+      assert.deepEqual(items[0], {
+        version: 1,
+        label: 'bar',
+      });
+
+      const foo = await db.get('key-val-store', 'foo');
+
+      assert.deepEqual(foo, {
+        version: 1,
+        label: 'bar',
       });
     });
   });
@@ -452,6 +486,40 @@ suite.only('SyncManager', () => {
       assert.equal(await manager.hasLocalChanges('object-store', 1), false);
       assert.equal(await manager.hasLocalChanges('object-store', 2), true);
       assert.equal(await manager.hasLocalChanges('object-store', 3), false);
+    });
+
+    test('without keyPath', async () => {
+      const schemaDB = await openDBWithSchema();
+      db = schemaDB as IDBPDatabase;
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': ['foo'],
+        },
+        buildPath: (operation, storeName, key) => {
+          if (storeName === 'key-val-store') {
+            return `/${storeName}/${key}`;
+          }
+          return;
+        },
+      });
+
+      await db.put(
+        'key-val-store',
+        {
+          label: 'baz',
+        },
+        'bar',
+      );
+
+      manager.start();
+
+      const change = await waitForPushSuccess(manager);
+
+      assert.equal(change.key, 'bar');
+
+      const localChangesCount = await db.count('_local_changes');
+
+      assert.equal(localChangesCount, 0);
     });
   });
 });

@@ -63,6 +63,21 @@ export interface SyncOptions {
    * @default 30000
    */
   fetchInterval: number;
+  /**
+   * Entities without `keyPath`.
+   *
+   * @example
+   * {
+   *   withoutKeyPath: {
+   *     common: [
+   *       "user"
+   *     ]
+   *   }
+   * }
+   *
+   * @see https://developer.mozilla.org/en-US/docs/Web/API/IDBObjectStore/keyPath
+   */
+  withoutKeyPath: Record<string, IDBValidKey[]>;
 }
 
 class FetchError extends Error {
@@ -108,6 +123,7 @@ export class SyncManager {
       buildFetchParams: opts.buildFetchParams || defaultBuildFetchParams,
       updatedAtAttribute: opts.updatedAtAttribute || 'updatedAt',
       fetchInterval: opts.fetchInterval || 30_000,
+      withoutKeyPath: opts.withoutKeyPath || {},
     };
     this.handleOnlineEvent = this.handleOnlineEvent.bind(this);
     this.handleOfflineEvent = this.handleOfflineEvent.bind(this);
@@ -284,11 +300,19 @@ abstract class Loop {
 }
 
 class FetchLoop extends Loop {
-  run() {
+  async run() {
     const storeNames = this.db.objectStoreNames;
     for (let storeName of storeNames) {
-      if (!IGNORED_STORES.includes(storeName)) {
-        this.tryFetchUpdates(storeName);
+      if (
+        !IGNORED_STORES.includes(storeName) &&
+        !this.opts.withoutKeyPath[storeName]
+      ) {
+        await this.tryFetchUpdates(storeName);
+      }
+    }
+    for (const storeName in this.opts.withoutKeyPath) {
+      for (const key of this.opts.withoutKeyPath[storeName]) {
+        await this.fetchUpdatesForKey(storeName, key);
       }
     }
   }
@@ -341,8 +365,10 @@ class FetchLoop extends Loop {
       throw new FetchError('invalid response format', response);
     }
 
-    if (content.data.length === 0) {
-      this.manager.onfetchsuccess(storeName, content.data, content.hasMore);
+    const items = content.data;
+
+    if (items.length === 0) {
+      this.manager.onfetchsuccess(storeName, items, content.hasMore);
       return false;
     }
 
@@ -356,25 +382,25 @@ class FetchLoop extends Loop {
       .objectStore(LOCAL_CHANGES_STORE)
       .index('storeName, key');
 
-    for (const entity of content.data) {
-      changeIndex
-        .count([storeName, entity[keyPath]])
-        .then((hasLocalUpdates) => {
-          if (hasLocalUpdates) {
-            return;
-          }
-          const isTombstone = entity[VERSION_ATTRIBUTE] === -1;
-          if (isTombstone) {
-            // @ts-ignore
-            store.delete(entity[store.keyPath], NO_TRACKING_FLAG);
-          } else {
-            // @ts-ignore
-            store.put(entity, undefined, NO_TRACKING_FLAG);
-          }
-        });
+    for (const entity of items) {
+      const hasLocalUpdates = await changeIndex.count([
+        storeName,
+        entity[keyPath],
+      ]);
+      if (hasLocalUpdates) {
+        continue;
+      }
+      const isTombstone = entity[VERSION_ATTRIBUTE] === -1;
+      if (isTombstone) {
+        // @ts-ignore
+        store.delete(entity[store.keyPath], NO_TRACKING_FLAG);
+      } else {
+        // @ts-ignore
+        store.put(entity, undefined, NO_TRACKING_FLAG);
+      }
     }
 
-    const lastEntity = content.data[content.data.length - 1];
+    const lastEntity = items[items.length - 1];
 
     transaction.objectStore(LOCAL_OFFSETS_STORE).put(
       {
@@ -388,9 +414,58 @@ class FetchLoop extends Loop {
 
     const hasMore = !!content.hasMore;
 
-    this.manager.onfetchsuccess(storeName, content.data, hasMore);
+    this.manager.onfetchsuccess(storeName, items, hasMore);
 
     return hasMore;
+  }
+
+  private async fetchUpdatesForKey(
+    storeName: string,
+    key: IDBValidKey,
+  ): Promise<void> {
+    const path =
+      this.opts.buildPath('fetch', storeName, key) ||
+      defaultBuildPath('fetch', storeName, key);
+
+    let response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        ...this.opts.fetchOptions,
+      });
+    } catch (e) {
+      throw new FetchError(e.message);
+    }
+
+    if (!response.ok) {
+      throw new FetchError('unexpected response from server', response);
+    }
+
+    const item = await response.json();
+
+    const transaction = this.db.transaction(
+      [LOCAL_CHANGES_STORE, storeName],
+      'readwrite',
+    );
+    const store = transaction.objectStore(storeName);
+    const changeIndex = transaction
+      .objectStore(LOCAL_CHANGES_STORE)
+      .index('storeName, key');
+
+    const [hasLocalUpdates, isUpToDate] = await Promise.all([
+      changeIndex.count([storeName, key]),
+      store.get(key).then((current) => {
+        return current && current.version === item.version;
+      }),
+    ]);
+
+    if (hasLocalUpdates || isUpToDate) {
+      return;
+    }
+
+    // @ts-ignore
+    await store.put(item, key, NO_TRACKING_FLAG);
+
+    this.manager.onfetchsuccess(storeName, [item], false);
   }
 }
 

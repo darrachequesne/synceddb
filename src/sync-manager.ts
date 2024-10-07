@@ -100,7 +100,8 @@ const defaultBuildFetchParams = (storeName: string, offset: Offset) => {
     size: '100',
   });
   if (offset) {
-    searchParams.append('after', `${offset.updatedAt},${offset.id}`);
+    searchParams.append('after', offset.updatedAt);
+    searchParams.append('after_id', offset.id.toString());
   }
   return searchParams;
 };

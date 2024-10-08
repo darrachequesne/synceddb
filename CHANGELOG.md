@@ -1,12 +1,22 @@
 # History
 
-| Version                  | Release date   |
-|--------------------------|----------------|
-| [0.1.0](#010-2024-10-07) | September 2024 |
-| [0.0.2](#002-2022-03-26) | March 2022     |
-| [0.0.1](#001-2022-03-25) | March 2022     |
+| Version                  | Release date |
+|--------------------------|--------------|
+| [0.1.1](#011-2024-10-08) | October 2024 |
+| [0.1.0](#010-2024-10-07) | October 2024 |
+| [0.0.2](#002-2022-03-26) | March 2022   |
+| [0.0.1](#001-2022-03-25) | March 2022   |
 
 # Release notes
+
+## [0.1.1](https://github.com/darrachequesne/synceddb/compare/0.1.0...0.1.1) (2024-10-08)
+
+
+### Bug Fixes
+
+* include object stores without keyPath in the fetch loop ([66c927c](https://github.com/darrachequesne/synceddb/commit/66c927c442261f7b74106fd9520f22f1c0b279be))
+
+
 
 ## [0.1.0](https://github.com/darrachequesne/synceddb/compare/0.0.2...0.1.0) (2024-10-07)
 

@@ -300,42 +300,38 @@ abstract class Loop {
   }
 }
 
+function sleep(duration: number) {
+  return new Promise((resolve) => setTimeout(resolve, duration));
+}
+
 class FetchLoop extends Loop {
   async run() {
-    const storeNames = this.db.objectStoreNames;
-    for (let storeName of storeNames) {
-      if (
-        !IGNORED_STORES.includes(storeName) &&
-        !this.opts.withoutKeyPath[storeName]
-      ) {
-        await this.tryFetchUpdates(storeName);
-      }
-    }
-    for (const storeName in this.opts.withoutKeyPath) {
-      for (const key of this.opts.withoutKeyPath[storeName]) {
-        await this.fetchUpdatesForKey(storeName, key);
-      }
-    }
-  }
-
-  private async tryFetchUpdates(storeName: string) {
     if (!this.isRunning) {
       return;
     }
+    const storeNames = this.db.objectStoreNames;
 
-    let hasMore = false;
     try {
-      hasMore = await this.fetchUpdates(storeName);
+      for (let storeName of storeNames) {
+        if (
+          !IGNORED_STORES.includes(storeName) &&
+          !this.opts.withoutKeyPath[storeName]
+        ) {
+          while (await this.fetchUpdates(storeName)) {
+            await sleep(MIN_DELAY_BETWEEN_REQUESTS);
+          }
+        }
+      }
+      for (const storeName in this.opts.withoutKeyPath) {
+        for (const key of this.opts.withoutKeyPath[storeName]) {
+          await this.fetchUpdatesForKey(storeName, key);
+        }
+      }
     } catch (e) {
       this.manager.onfetcherror(e);
     }
 
-    setTimeout(
-      () => {
-        this.tryFetchUpdates(storeName);
-      },
-      hasMore ? MIN_DELAY_BETWEEN_REQUESTS : this.opts.fetchInterval,
-    );
+    setTimeout(() => this.run(), this.opts.fetchInterval);
   }
 
   private async fetchUpdates(storeName: string): Promise<boolean> {

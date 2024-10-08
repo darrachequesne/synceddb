@@ -45,7 +45,11 @@ suite.only('SyncManager', () => {
     test('no conflict', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       manager.start();
       await waitForFetchSuccess(manager);
@@ -78,7 +82,11 @@ suite.only('SyncManager', () => {
     test('conflict', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       // untracked
       await db.add(
@@ -117,7 +125,11 @@ suite.only('SyncManager', () => {
     test('tombstone', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       // untracked
       await db.add(
@@ -148,12 +160,15 @@ suite.only('SyncManager', () => {
       db = schemaDB as IDBPDatabase;
       manager = new SyncManager(db, BASE_URL, {
         buildPath: (operation, storeName, key) => {
-          if (storeName !== "products") {
+          if (storeName !== 'products') {
             return;
           }
-          return "/company-products" + (key ? ("/" + key) : "");
+          return '/company-products' + (key ? '/' + key : '');
         },
         updatedAtAttribute: 'lastUpdateDate',
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
       });
 
       manager.start();
@@ -215,7 +230,11 @@ suite.only('SyncManager', () => {
     test('add', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       await db.add('object-store', {
         id: 3,
@@ -254,7 +273,11 @@ suite.only('SyncManager', () => {
     test('put', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       await db.add('object-store', {
         id: 4,
@@ -294,7 +317,11 @@ suite.only('SyncManager', () => {
     test('put (discard local)', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       await db.put('object-store', {
         id: 6,
@@ -326,7 +353,11 @@ suite.only('SyncManager', () => {
     test('put (override remote)', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       await db.put('object-store', {
         id: 7,
@@ -359,7 +390,11 @@ suite.only('SyncManager', () => {
     test('delete', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       await db.add('object-store', {
         id: 4,
@@ -466,7 +501,11 @@ suite.only('SyncManager', () => {
     test('has pending changes', async () => {
       const schemaDB = await openDBWithSchema();
       db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL);
+      manager = new SyncManager(db, BASE_URL, {
+        withoutKeyPath: {
+          'key-val-store': [],
+        },
+      });
 
       // untracked
       await db.add(

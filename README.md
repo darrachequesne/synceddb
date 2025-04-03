@@ -10,40 +10,44 @@ Bundle size: ~3.26 kB brotli'd
 
 **Table of content**
 
-1. [Features](#features)
-   1. [All the usability improvements from the `idb` library](#all-the-usability-improvements-from-the-idb-library) 
-   2. [Sync with a remote REST API](#sync-with-a-remote-rest-api)
-   3. [Auto-reloading queries](#auto-reloading-queries)
-2. [Disclaimer](#disclaimer)
-3. [Installation](#installation)
-4. [API](#api)
-   1. [SyncManager](#syncmanager)
-      1. [Options](#options)
-         1. [`fetchOptions`](#fetchoptions)
-         2. [`fetchInterval`](#fetchinterval)
-         3. [`buildFetchParams`](#buildfetchparams)
-         4. [`updatedAtAttribute`](#updatedatattribute)
-         4. [`withoutKeyPath`](#withoutkeypath)
-      2. [Methods](#methods)
-         1. [`start()`](#start)
-         2. [`stop()`](#stop)
-         3. [`clear()`](#clear)
-         4. [`hasLocalChanges()`](#haslocalchanges)
-         5. [`onfetchsuccess`](#onfetchsuccess)
-         6. [`onfetcherror`](#onfetcherror)
-         7. [`onpushsuccess`](#onpushsuccess)
-         8. [`onpusherror`](#onpusherror)
-   2. [LiveQuery](#livequery)
-      1. [Example with React](#example-with-react)
-      2. [Example with Vue.js](#example-with-vuejs)
-5. [Expectations for the REST API](#expectations-for-the-rest-api)
-   1. [Fetching changes](#fetching-changes)
-   2. [Pushing changes](#pushing-changes)
-6. [Alternatives](#alternatives)
+<!-- TOC -->
+* [Features](#features)
+  * [All the usability improvements from the `idb` library](#all-the-usability-improvements-from-the-idb-library)
+  * [Sync with a remote REST API](#sync-with-a-remote-rest-api)
+  * [Auto-reloading queries](#auto-reloading-queries)
+* [Disclaimer](#disclaimer)
+* [Installation](#installation)
+* [API](#api)
+  * [SyncManager](#syncmanager)
+    * [Options](#options)
+      * [`fetchOptions`](#fetchoptions)
+      * [`fetchInterval`](#fetchinterval)
+      * [`buildPath`](#buildpath)
+      * [`buildFetchParams`](#buildfetchparams)
+      * [`updatedAtAttribute`](#updatedatattribute)
+      * [`withoutKeyPath`](#withoutkeypath)
+    * [Methods](#methods)
+      * [`start()`](#start)
+      * [`stop()`](#stop)
+      * [`clear()`](#clear)
+      * [`hasLocalChanges()`](#haslocalchanges)
+      * [`onfetchsuccess`](#onfetchsuccess)
+      * [`onfetcherror`](#onfetcherror)
+      * [`onpushsuccess`](#onpushsuccess)
+      * [`onpusherror`](#onpusherror)
+  * [LiveQuery](#livequery)
+    * [Example with React](#example-with-react)
+    * [Example with Vue.js](#example-with-vuejs)
+* [Expectations for the REST API](#expectations-for-the-rest-api)
+  * [Fetching changes](#fetching-changes)
+  * [Pushing changes](#pushing-changes)
+* [Alternatives](#alternatives)
+* [Miscellaneous](#miscellaneous)
+<!-- TOC -->
 
-# Features
+## Features
 
-## All the usability improvements from the `idb` library
+### All the usability improvements from the `idb` library
 
 Since it is a fork of the [`idb`](https://github.com/jakearchibald/idb) library, `synceddb` shares the same Promise-based API:
 
@@ -61,7 +65,7 @@ await db.add('items', { id: 1, label: 'Dagger' });
 
 More information [here](https://github.com/jakearchibald/idb#api).
 
-## Sync with a remote REST API
+### Sync with a remote REST API
 
 Every change is tracked in a store. The [SyncManager](#syncmanager) then sync these changes with the remote REST API when the connection is available, making it easier to build offline-first applications.
 
@@ -82,7 +86,7 @@ await db.delete('items', 2);
 
 See also: [Expectations for the REST API](#expectations-for-the-rest-api)
 
-## Auto-reloading queries
+### Auto-reloading queries
 
 The [LiveQuery](#livequery) provides a way to run a query every time the underlying stores are updated:
 
@@ -107,7 +111,7 @@ await query.run();
 
 Inspired from [Dexie.js liveQuery](https://dexie.org/docs/liveQuery()).
 
-# Disclaimer
+## Disclaimer
 
 - no version history
 
@@ -117,7 +121,7 @@ Only the last version of each entity is kept on the client side.
 
 The last write wins (though you can customize the behavior in the [`onpusherror`](#onpusherror) handler).
 
-# Installation
+## Installation
 
 ```sh
 npm install synceddb
@@ -145,11 +149,11 @@ async function doDatabaseStuff() {
 }
 ```
 
-# API
+## API
 
 For database-related operations, please see the `idb` [documentation](https://github.com/jakearchibald/idb#api).
 
-## SyncManager
+### SyncManager
 
 ```js
 import { openDB, SyncManager } from 'synceddb';
@@ -160,9 +164,9 @@ const manager = new SyncManager(db, 'https://example.com');
 manager.start();
 ```
 
-### Options
+#### Options
 
-#### `fetchOptions`
+##### `fetchOptions`
 
 Additional options for all HTTP requests.
 
@@ -184,7 +188,7 @@ manager.start();
 
 Reference: https://developer.mozilla.org/en-US/docs/Web/API/fetch
 
-#### `fetchInterval`
+##### `fetchInterval`
 
 The number of ms between two fetch requests for a given store.
 
@@ -201,7 +205,7 @@ const manager = new SyncManager(db, 'https://example.com', {
 manager.start();
 ```
 
-#### `buildPath`
+##### `buildPath`
 
 A function that allows to override the request path for a given request.
 
@@ -225,7 +229,7 @@ const manager = new SyncManager(db, 'https://example.com', {
 manager.start();
 ```
 
-#### `buildFetchParams`
+##### `buildFetchParams`
 
 A function that allows to override the query params of the fetch requests.
 
@@ -251,7 +255,7 @@ const manager = new SyncManager(db, 'https://example.com', {
 manager.start();
 ```
 
-#### `updatedAtAttribute`
+##### `updatedAtAttribute`
 
 The name of the attribute that indicates the last updated date of the entity.
 
@@ -268,7 +272,7 @@ const manager = new SyncManager(db, 'https://example.com', {
 manager.start();
 ```
 
-#### `withoutKeyPath`
+##### `withoutKeyPath`
 
 List entities from object stores without `keyPath`.
 
@@ -299,9 +303,9 @@ manager.start();
 await db.put('common', { firstName: 'john' }, 'user');
 ```
 
-### Methods
+#### Methods
 
-#### `start()`
+##### `start()`
 
 Starts the sync process with the remote server.
 
@@ -314,7 +318,7 @@ const manager = new SyncManager(db, 'https://example.com');
 manager.start();
 ```
 
-#### `stop()`
+##### `stop()`
 
 Stops the sync process.
 
@@ -327,7 +331,7 @@ const manager = new SyncManager(db, 'https://example.com');
 manager.stop();
 ```
 
-#### `clear()`
+##### `clear()`
 
 Clears the local stores.
 
@@ -340,7 +344,7 @@ const manager = new SyncManager(db, 'https://example.com');
 manager.clear();
 ```
 
-#### `hasLocalChanges()`
+##### `hasLocalChanges()`
 
 Returns whether a given entity currently has local changes that are not synced yet.
 
@@ -355,7 +359,7 @@ await db.put('items', { id: 1 });
 const hasLocalChanges = await manager.hasLocalChanges('items', 1); // true
 ```
 
-#### `onfetchsuccess`
+##### `onfetchsuccess`
 
 Called after some entities are successfully fetched from the remote server.
 
@@ -370,7 +374,7 @@ manager.onfetchsuccess = (storeName, entities, hasMore) => {
 }
 ```
 
-#### `onfetcherror`
+##### `onfetcherror`
 
 Called when something goes wrong when fetching the changes from the remote server.
 
@@ -385,7 +389,7 @@ manager.onfetcherror = (err) => {
 }
 ```
 
-#### `onpushsuccess`
+##### `onpushsuccess`
 
 Called after a change is successfully pushed to the remote server.
 
@@ -400,7 +404,7 @@ manager.onpushsuccess = ({ operation, storeName, key, value }) => {
 }
 ```
 
-#### `onpusherror`
+##### `onpusherror`
 
 Called when something goes wrong when pushing a change to the remote server.
 
@@ -430,7 +434,7 @@ manager.onpusherror = (change, response, retryAfter, discardLocalChange, overrid
 }
 ```
 
-## LiveQuery
+### LiveQuery
 
 The first argument is an array of stores. Every time one of these stores is updated, the function provided in the 2nd argument will be called.
 
@@ -447,7 +451,7 @@ const query = new LiveQuery(['items'], async () => {
 });
 ```
 
-### Example with React
+#### Example with React
 
 ```js
 import { openDB, LiveQuery } from 'synceddb';
@@ -485,7 +489,7 @@ export default function MyComponent() {
 }
 ```
 
-### Example with Vue.js
+#### Example with Vue.js
 
 ```vue
 <script setup>
@@ -513,9 +517,9 @@ onBeforeUnmount(() => {
 </script>
 ```
 
-# Expectations for the REST API
+## Expectations for the REST API
 
-## Fetching changes
+### Fetching changes
 
 Changes are fetched from the REST API with `GET` requests:
 
@@ -560,7 +564,7 @@ Expected response:
 
 A fetch request will be sent for each store of the database, every X seconds (see the [fetchInterval](#fetchinterval) option).
 
-## Pushing changes
+### Pushing changes
 
 Each successful readwrite transaction will be translated into an HTTP request, when the connection is available:
 
@@ -575,7 +579,7 @@ Success must be indicated by an HTTP 2xx response. Any other response status mea
 
 Please see the Express server [there](https://github.com/darrachequesne/synceddb-todo-example/blob/main/express-server/index.js) for reference.
 
-# Alternatives
+## Alternatives
 
 Here are some alternatives that you might find interesting:
 
@@ -584,3 +588,8 @@ Here are some alternatives that you might find interesting:
 - pouchdb: https://pouchdb.com/
 - Automerge: https://github.com/automerge/automerge
 - Yjs: https://github.com/yjs/yjs
+- Electric: https://electric-sql.com/
+
+## Miscellaneous
+
+- [Pagination with IndexedDB](https://github.com/darrachequesne/indexeddb-pagination)

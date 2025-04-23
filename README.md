@@ -6,9 +6,9 @@ This is a fork of the awesome [`idb`](https://github.com/jakearchibald/idb) libr
 
 The source code for the example above can be found [here](https://github.com/darrachequesne/synceddb-todo-example).
 
-Bundle size: ~3.26 kB brotli'd
+Bundle size: ~3.48 kB brotli'd
 
-Based on [`idb@7.0.0`](https://github.com/jakearchibald/idb/releases/tag/v7.0.0) (Nov 2021): [e04104a...HEAD](https://github.com/darrachequesne/synceddb/compare/e04104a...HEAD)
+Based on [`idb@7.0.2`](https://github.com/jakearchibald/idb/releases/tag/v7.0.2) (Jun 2022): [e04104a...HEAD](https://github.com/darrachequesne/synceddb/compare/e04104a...HEAD)
 
 **Table of content**
 

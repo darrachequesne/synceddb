@@ -2,12 +2,30 @@
 
 | Version                  | Release date |
 |--------------------------|--------------|
+| [0.2.0](#020-2025-04-23) | April 2025   |
 | [0.1.1](#011-2024-10-08) | October 2024 |
 | [0.1.0](#010-2024-10-07) | October 2024 |
 | [0.0.2](#002-2022-03-26) | March 2022   |
 | [0.0.1](#001-2022-03-25) | March 2022   |
 
 # Release notes
+
+## [0.2.0](https://github.com/darrachequesne/synceddb/compare/0.1.1...0.2.0) (2025-04-23)
+
+Based on [`idb@7.0.2`](https://github.com/jakearchibald/idb/releases/tag/v7.0.2) (Jun 2022).
+
+### Bug Fixes
+
+* fix cjs async ittr entry file ([32e66ec](https://github.com/darrachequesne/synceddb/commit/32e66ecf27e6a0e14ac3fecf0159f1a227ec971d)) (cherry-picked from origin)
+* **ts:** `moduleResolution: node12` compat ([a392065](https://github.com/darrachequesne/synceddb/commit/a39206507aa6731645e2fdbe2c1a3b814afa18df)) (cherry-picked from origin)
+
+
+### Features
+
+* **ts:** add DB types to the SyncManager class ([393fe86](https://github.com/darrachequesne/synceddb/commit/393fe8630c4d832d3f1e2210677af99e10554c81))
+* implement computed stores ([b25b03a](https://github.com/darrachequesne/synceddb/commit/b25b03a80839eead8d84c48e455f0ec3df123ed9))
+
+
 
 ## [0.1.1](https://github.com/darrachequesne/synceddb/compare/0.1.0...0.1.1) (2024-10-08)
 
@@ -49,6 +67,7 @@ After: `?sort=updated_at:asc&size=100&after=2000-01-01T00:00:00.000Z&after_id=12
 
 ## [0.0.1](https://github.com/darrachequesne/synceddb/releases/tag/0.0.1) (2022-03-25)
 
+Based on [`idb@7.0.0`](https://github.com/jakearchibald/idb/releases/tag/v7.0.0) (November 2021).
 
 ### Features
 

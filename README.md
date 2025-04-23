@@ -705,7 +705,10 @@ Here are some alternatives that you might find interesting:
 - Automerge: https://github.com/automerge/automerge
 - Yjs: https://github.com/yjs/yjs
 - Electric: https://electric-sql.com/
+- absurd-sql: https://github.com/jlongster/absurd-sql
 
 ## Miscellaneous
 
 - [Pagination with IndexedDB](https://github.com/darrachequesne/indexeddb-pagination)
+- [Speeding up IndexedDB reads and writes](https://nolanlawson.com/2021/08/22/speeding-up-indexeddb-reads-and-writes/)
+- [Breaking the Borders of IndexedDB](https://hacks.mozilla.org/2014/06/breaking-the-borders-of-indexeddb/)

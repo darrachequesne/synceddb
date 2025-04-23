@@ -8,6 +8,8 @@ The source code for the example above can be found [here](https://github.com/dar
 
 Bundle size: ~3.26 kB brotli'd
 
+Based on [`idb@7.0.0`](https://github.com/jakearchibald/idb/releases/tag/v7.0.0) (Nov 2021): [e04104a...HEAD](https://github.com/darrachequesne/synceddb/compare/e04104a...HEAD)
+
 **Table of content**
 
 <!-- TOC -->

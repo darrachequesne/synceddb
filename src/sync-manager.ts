@@ -1,4 +1,4 @@
-import { IDBPDatabase } from './entry.js';
+import type { DBSchema, IDBPDatabase } from './entry.js';
 import {
   LOCAL_OFFSETS_STORE,
   IGNORED_STORES,
@@ -33,11 +33,29 @@ interface Offset {
   updatedAt: any;
 }
 
+interface SyncManagerSchema {
+  [LOCAL_OFFSETS_STORE]: {
+    key: string;
+    value: Offset;
+  };
+  [LOCAL_CHANGES_STORE]: {
+    key: string;
+    value: Change;
+    indexes: {
+      'storeName, key': string[];
+    };
+  };
+}
+
 export interface SyncOptions {
   /**
    * Allow to override the request path for a given request
    */
-  buildPath: (operation: 'fetch' | 'add' | 'put' | 'delete', storeName: string, key?: IDBValidKey) => string | undefined;
+  buildPath: (
+    operation: 'fetch' | 'add' | 'put' | 'delete',
+    storeName: string,
+    key?: IDBValidKey,
+  ) => string | undefined;
   /**
    * Additional options for all HTTP requests.
    *
@@ -86,13 +104,17 @@ class FetchError extends Error {
   }
 }
 
-const defaultBuildPath = (operation: 'fetch' | 'add' | 'put' | 'delete', storeName: string, key?: IDBValidKey) => {
+const defaultBuildPath = (
+  operation: 'fetch' | 'add' | 'put' | 'delete',
+  storeName: string,
+  key?: IDBValidKey,
+) => {
   if (operation === 'fetch' || operation === 'add') {
     return `/${storeName}`;
   } else {
     return `/${storeName}/${key}`;
   }
-}
+};
 
 const defaultBuildFetchParams = (storeName: string, offset: Offset) => {
   const searchParams = new URLSearchParams({
@@ -106,7 +128,8 @@ const defaultBuildFetchParams = (storeName: string, offset: Offset) => {
   return searchParams;
 };
 
-export class SyncManager {
+export class SyncManager<DBTypes extends DBSchema | unknown = unknown> {
+  private readonly db: IDBPDatabase<DBTypes | SyncManagerSchema>;
   private readonly opts: SyncOptions;
   private isOnline: boolean = true;
 
@@ -114,10 +137,11 @@ export class SyncManager {
   private pushLoop?: PushLoop;
 
   constructor(
-    private readonly db: IDBPDatabase,
+    db: IDBPDatabase<DBTypes>,
     private readonly baseUrl: string,
     opts: Partial<SyncOptions> = {},
   ) {
+    this.db = db as IDBPDatabase<DBTypes | SyncManagerSchema>;
     this.opts = {
       buildPath: opts.buildPath || defaultBuildPath,
       fetchOptions: opts.fetchOptions || {},
@@ -220,7 +244,10 @@ export class SyncManager {
    * @param storeName
    * @param key
    */
-  public hasLocalChanges(storeName: string, key: IDBValidKey): Promise<boolean> {
+  public hasLocalChanges(
+    storeName: string,
+    key: IDBValidKey,
+  ): Promise<boolean> {
     return this.db
       .countFromIndex(LOCAL_CHANGES_STORE, 'storeName, key', [storeName, key])
       .then((count) => count > 0);
@@ -285,8 +312,9 @@ abstract class Loop {
   protected isRunning: boolean = true;
 
   constructor(
-    protected readonly manager: SyncManager,
-    protected readonly db: IDBPDatabase,
+    // TODO improve types
+    protected readonly manager: SyncManager<any>,
+    protected readonly db: IDBPDatabase<any>,
     protected readonly baseUrl: string,
     protected readonly opts: SyncOptions,
   ) {
@@ -335,7 +363,9 @@ class FetchLoop extends Loop {
   }
 
   private async fetchUpdates(storeName: string): Promise<boolean> {
-    const path = this.opts.buildPath('fetch', storeName) || defaultBuildPath( 'fetch', storeName);
+    const path =
+      this.opts.buildPath('fetch', storeName) ||
+      defaultBuildPath('fetch', storeName);
     const url = this.baseUrl + path;
     const lastUpdatedEntity = await this.db.get(LOCAL_OFFSETS_STORE, storeName);
     const searchParams = this.opts.buildFetchParams(
@@ -493,7 +523,9 @@ class PushLoop extends Loop {
 
     const changeKey = cursor!.key;
     const { operation, storeName, key, value } = change;
-    const path = this.opts.buildPath(operation, storeName, key) || defaultBuildPath(operation, storeName, key);
+    const path =
+      this.opts.buildPath(operation, storeName, key) ||
+      defaultBuildPath(operation, storeName, key);
     const url = this.baseUrl + path;
     const method = OPERATION_TO_METHOD.get(operation);
 
@@ -517,7 +549,7 @@ class PushLoop extends Loop {
         method,
         headers: {},
         ...this.opts.fetchOptions,
-      }
+      };
       if (value) {
         options.body = JSON.stringify(value);
         options.headers['Content-Type'] = 'application/json';

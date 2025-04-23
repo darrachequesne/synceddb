@@ -5,13 +5,17 @@ import {
   deleteDatabase,
   openDBWithCustomSchema,
   openDBWithSchema,
+  TestDBSchema,
 } from './utils';
 
 const { assert } = chai;
 const BASE_URL = 'http://localhost:4000';
 const NO_TRACKING_FLAG = true;
 
-async function waitForFetchSuccess(manager: SyncManager, count: number = 1) {
+async function waitForFetchSuccess(
+  manager: SyncManager<any>,
+  count: number = 1,
+) {
   return new Promise<any[]>((resolve) => {
     manager.onfetchsuccess = (_storeName, entities) => {
       if (--count === 0) {
@@ -21,7 +25,10 @@ async function waitForFetchSuccess(manager: SyncManager, count: number = 1) {
   });
 }
 
-async function waitForPushSuccess(manager: SyncManager, count: number = 1) {
+async function waitForPushSuccess(
+  manager: SyncManager<any>,
+  count: number = 1,
+) {
   return new Promise<any>((resolve) => {
     manager.onpushsuccess = (change) => {
       if (--count === 0) {
@@ -43,9 +50,23 @@ suite.only('SyncManager', () => {
 
   suite('fetch changes', () => {
     test('no conflict', async () => {
-      const schemaDB = await openDBWithSchema();
-      db = schemaDB as IDBPDatabase;
-      manager = new SyncManager(db, BASE_URL, {
+      const db = (await openDBWithSchema()) as IDBPDatabase<
+        | TestDBSchema
+        | {
+            _local_offsets: {
+              key: string;
+              value: any;
+            };
+            _local_changes: {
+              key: string;
+              value: any;
+              indexes: {
+                'storeName, key': string[];
+              };
+            };
+          }
+      >;
+      const manager = new SyncManager(db, BASE_URL, {
         withoutKeyPath: {
           'key-val-store': [],
         },
@@ -77,6 +98,9 @@ suite.only('SyncManager', () => {
       const localChangesCount = await db.count('_local_changes');
 
       assert.equal(localChangesCount, 0);
+
+      manager.stop();
+      db.close();
     });
 
     test('conflict', async () => {

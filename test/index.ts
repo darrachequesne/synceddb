@@ -24,6 +24,7 @@ function loadScript(url: string): Promise<void> {
   if (!edgeCompat) await loadScript('./iterate.js');
   await loadScript('./sync-manager.js');
   await loadScript('./live-query.js');
+  await loadScript('./computed-stores.js');
   await deleteDatabase();
   mocha.run();
 })();

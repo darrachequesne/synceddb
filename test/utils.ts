@@ -31,6 +31,10 @@ export interface CustomDBSchema extends TestDBSchema {
     };
     key: string;
   };
+  'object-store-computed': {
+    value: ObjectStoreValue;
+    key: number;
+  };
 }
 
 export const dbName = 'test-db';
@@ -66,6 +70,7 @@ export function openDBWithCustomSchema(): Promise<
       db.createObjectStore('key-val-store');
       db.createObjectStore('object-store', { keyPath: 'id' });
       db.createObjectStore('products', { keyPath: 'code' });
+      db.createObjectStore('object-store-computed', { keyPath: 'id' });
     },
   });
 }

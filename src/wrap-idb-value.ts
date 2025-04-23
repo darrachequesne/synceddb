@@ -1,10 +1,12 @@
-import {
+import type {
+  DBSchema,
   IDBPCursor,
   IDBPCursorWithValue,
   IDBPDatabase,
   IDBPIndex,
   IDBPObjectStore,
   IDBPTransaction,
+  StoreNames,
 } from './entry.js';
 import { Constructor, Func, instanceOfAny } from './util.js';
 import {
@@ -156,20 +158,11 @@ let idbProxyTraps: ProxyHandler<any> = {
       }
       // Make tx.store return the only store in the transaction, or undefined if there are many.
       if (prop === 'store') {
-        const storeNames = receiver.objectStoreNames;
-        if (storeNames.length === 1) {
-          return receiver.objectStore(storeNames[0]);
-        } else if (
-          storeNames.length === 2 &&
-          storeNames.contains(LOCAL_CHANGES_STORE)
-        ) {
-          for (let storeName of storeNames) {
-            if (storeName !== LOCAL_CHANGES_STORE) {
-              return receiver.objectStore(storeName);
-            }
-          }
-        }
-        return undefined;
+        const storeNames =
+          receiver._initialStoreNames || receiver.objectStoreNames;
+        return storeNames.length === 1
+          ? receiver.objectStore(storeNames[0])
+          : undefined;
       }
     }
     // Else transform whatever we get back.
@@ -194,6 +187,81 @@ export function replaceTraps(
   callback: (currentTraps: ProxyHandler<any>) => ProxyHandler<any>,
 ): void {
   idbProxyTraps = callback(idbProxyTraps);
+}
+
+interface Change<DBTypes extends DBSchema | unknown = unknown> {
+  operation: 'add' | 'put' | 'delete';
+  storeName: StoreNames<DBTypes>;
+  key: any;
+  value?: any;
+}
+
+type ChangeHandler<DBTypes extends DBSchema | unknown = unknown> = (
+  tx: IDBPTransaction<DBTypes, StoreNames<DBTypes>[], 'readwrite'>,
+  change: Change<DBTypes>,
+) => Promise<void>;
+
+const computedStores = new Map<
+  string,
+  { storeNames: string[]; onChange: ChangeHandler }
+>();
+
+export function isComputedStore(storeName: string) {
+  return computedStores.has(storeName);
+}
+
+export async function createComputedStore<DBTypes>(
+  db: IDBPDatabase<DBTypes>,
+  computedStoreName: StoreNames<DBTypes>,
+  mainStoreName: StoreNames<DBTypes>,
+  secondaryStoreNames: Array<StoreNames<DBTypes>>,
+  onChange: ChangeHandler<DBTypes>,
+): Promise<void> {
+  // @ts-expect-error
+  computedStores.set(computedStoreName, {
+    storeNames: [mainStoreName, ...secondaryStoreNames],
+    onChange,
+  });
+
+  const tx = db.transaction(
+    [computedStoreName, mainStoreName, ...secondaryStoreNames],
+    'readwrite',
+  );
+
+  const computedStore = tx.objectStore(computedStoreName);
+  // @ts-expect-error the flag is used to prevent a partial init
+  const initFlag = await computedStore.get('__init_complete');
+
+  if (initFlag) {
+    return;
+  }
+
+  let cursor = await tx.objectStore(mainStoreName).openCursor();
+  while (cursor) {
+    await onChange(tx, {
+      storeName: mainStoreName,
+      operation: 'add',
+      key: cursor.key,
+      value: cursor.value,
+    });
+    cursor = await cursor.continue();
+  }
+  // @ts-expect-error
+  await computedStore.add({
+    [computedStore.keyPath as string]: '__init_complete',
+  });
+
+  await tx.done;
+}
+
+function pushIfMissing<T>(array: T[], e: T): void {
+  if (!array.includes(e)) {
+    array.push(e);
+  }
+}
+
+function includesAny<T>(array1: T[], array2: T[]): boolean {
+  return array2.some((e) => array1.includes(e));
 }
 
 function wrapFunction<T extends Func>(func: T): Function {
@@ -242,12 +310,25 @@ function wrapFunction<T extends Func>(func: T): Function {
       if (!Array.isArray(args[0])) {
         args[0] = [args[0]];
       }
+      const initialStoreNames = args[0].slice(0);
       // transform `db.transaction("my-store", "readwrite")` into `db.transaction(["my-store", "_local_changes"], "readwrite")`
-      args[0].push(LOCAL_CHANGES_STORE);
+      pushIfMissing(args[0], LOCAL_CHANGES_STORE);
+
+      for (const [computedStoreName, { storeNames }] of computedStores) {
+        if (includesAny(storeNames, args[0])) {
+          pushIfMissing(args[0], computedStoreName);
+          for (const storeName of storeNames) {
+            pushIfMissing(args[0], storeName);
+          }
+        }
+      }
+
       // @ts-ignore
       const transaction = wrap(
         func.apply(unwrap(this), args),
       ) as IDBPTransaction;
+      // @ts-expect-error store the initial values to resolve `transaction.store` later
+      transaction._initialStoreNames = initialStoreNames;
       transaction.done.then(() => {
         const impactedStores = Array.from(transaction.objectStoreNames);
         // notify LiveQueries in the same browser tab
@@ -260,46 +341,65 @@ function wrapFunction<T extends Func>(func: T): Function {
     // track any update into the _local_changes store
     if (writeMethods.includes(func)) {
       const storeName = this.name;
-      // updates from the server are not tracked, i.e. `store.add(value, key, true)` or `store.delete(key, true)`
-      const isUpdateIgnored =
-        args.length === 3 ||
-        (args.length === 2 && func === IDBObjectStore.prototype.delete);
-      if (!IGNORED_STORES.includes(storeName) && !isUpdateIgnored) {
-        const store = this.transaction.objectStore(
-          LOCAL_CHANGES_STORE,
-        ) as IDBObjectStore;
-        const change: any = {
-          operation: func.name,
-          storeName,
-        };
 
-        switch (func) {
-          case IDBObjectStore.prototype.clear:
-            change.operation = 'delete';
-            this.getAllKeys().then((keys: IDBValidKey[]) => {
-              keys.forEach((key) => {
+      if (!IGNORED_STORES.includes(storeName) && !isComputedStore(storeName)) {
+        // updates from the server are not tracked, i.e. `store.add(value, key, true)` or `store.delete(key, true)`
+        const isUpdateIgnored =
+          args.length === 3 ||
+          (args.length === 2 && func === IDBObjectStore.prototype.delete);
+
+        if (!isUpdateIgnored || computedStores.size > 0) {
+          const store = this.transaction.objectStore(LOCAL_CHANGES_STORE);
+
+          const computeChange = (callback: (change: Change) => void) => {
+            const change: any = {
+              operation: func.name,
+              storeName,
+            };
+
+            switch (func) {
+              case IDBObjectStore.prototype.clear:
+                change.operation = 'delete';
+                this.getAllKeys().then((keys: IDBValidKey[]) => {
+                  keys.forEach((key) => {
+                    change.key = key;
+                    callback(change);
+                  });
+                });
+                break;
+
+              case IDBObjectStore.prototype.delete:
+                change.key = args[0];
+                callback(change);
+                break;
+
+              default: // store the full entity
+                // add or put
+                const value = args[0];
+                const key = args[1] || value[this.keyPath];
+
                 change.key = key;
-                store.add(change);
-              });
-            });
-            break;
-
-          case IDBObjectStore.prototype.delete:
-            change.key = args[0];
-            store.add(change);
-            break;
-
-          default:
-            // add or put
-            const value = args[0];
-            const key = args[1] || value[this.keyPath];
-            if (typeof value === 'object') {
-              value[VERSION_ATTRIBUTE] = (value[VERSION_ATTRIBUTE] || 0) + 1;
+                change.value = value;
+                callback(change);
+                break;
             }
-            change.key = key;
-            change.value = value; // store the full entity
-            store.add(change);
-            break;
+          };
+
+          computeChange((change) => {
+            if (!isUpdateIgnored) {
+              if (typeof change.value === 'object') {
+                change.value[VERSION_ATTRIBUTE] =
+                  (change.value[VERSION_ATTRIBUTE] || 0) + 1;
+              }
+              store.add(change);
+            }
+
+            for (const [_, { storeNames, onChange }] of computedStores) {
+              if (storeNames.includes(storeName)) {
+                onChange(this.transaction, change);
+              }
+            }
+          });
         }
       }
     }

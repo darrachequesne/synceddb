@@ -6,6 +6,7 @@ import {
   VERSION_ATTRIBUTE,
   CHANGE_EVENT_NAME,
 } from './constants.js';
+import { isComputedStore } from './wrap-idb-value.js';
 
 const OPERATION_TO_METHOD = new Map([
   ['add', 'POST'],
@@ -343,7 +344,8 @@ class FetchLoop extends Loop {
       for (let storeName of storeNames) {
         if (
           !IGNORED_STORES.includes(storeName) &&
-          !this.opts.withoutKeyPath[storeName]
+          !this.opts.withoutKeyPath[storeName] &&
+          !isComputedStore(storeName)
         ) {
           while (await this.fetchUpdates(storeName)) {
             await sleep(MIN_DELAY_BETWEEN_REQUESTS);

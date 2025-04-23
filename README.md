@@ -17,6 +17,7 @@ Based on [`idb@7.0.0`](https://github.com/jakearchibald/idb/releases/tag/v7.0.0)
   * [All the usability improvements from the `idb` library](#all-the-usability-improvements-from-the-idb-library)
   * [Sync with a remote REST API](#sync-with-a-remote-rest-api)
   * [Auto-reloading queries](#auto-reloading-queries)
+  * [Computed stores](#computed-stores)
 * [Disclaimer](#disclaimer)
 * [Installation](#installation)
 * [API](#api)
@@ -40,6 +41,7 @@ Based on [`idb@7.0.0`](https://github.com/jakearchibald/idb/releases/tag/v7.0.0)
   * [LiveQuery](#livequery)
     * [Example with React](#example-with-react)
     * [Example with Vue.js](#example-with-vuejs)
+  * [`createComputedStore()`](#createcomputedstore)
 * [Expectations for the REST API](#expectations-for-the-rest-api)
   * [Fetching changes](#fetching-changes)
   * [Pushing changes](#pushing-changes)
@@ -63,6 +65,18 @@ await transaction.store.add({ id: 1, label: 'Dagger' });
 
 // short version
 await db.add('items', { id: 1, label: 'Dagger' });
+```
+
+Async iterators are supported too (please notice the specific import):
+
+```js
+import { openDB, SyncManager } from 'synceddb/with-async-ittr';
+
+const tx = db.transaction('items');
+
+for await (const cursor of tx.store) {
+  // ...
+}
 ```
 
 More information [here](https://github.com/jakearchibald/idb#api).
@@ -112,6 +126,53 @@ await query.run();
 ```
 
 Inspired from [Dexie.js liveQuery](https://dexie.org/docs/liveQuery()).
+
+
+### Computed stores
+
+A computed store is a bit like [a materialized view in PostgreSQL](https://www.postgresql.org/docs/current/rules-materializedviews.html), it is updated every time one of the source object stores is updated:
+
+```js
+import { openDB, createComputedStore } from 'synceddb/with-async-ittr';
+
+const db = await openDB('my awesome database');
+
+await createComputedStore(db, 'invoices-with-customer', 'invoices', ['customers'], async (tx, change) => {
+  const computedStore = tx.objectStore('invoices-with-customer');
+
+  if (change.storeName === 'invoices') {
+    if (change.operation === 'add' || change.operation === 'put') {
+      const invoice = change.value;
+      // fetch the customer object
+      invoice.customer = await tx.objectStore('customers').get(invoice.customerId);
+      // update the computed store
+      computedStore.put(invoice);
+    } else { // change.operation === 'delete'
+      computedStore.delete(change.key);
+    }
+  }
+
+  if (change.storeName === 'customers') {
+    if (change.operation === 'put') {
+      const customer = change.value;
+      // update all invoices with the given customer in the computed store
+      for await (const cursor of computedStore.index('by-customer').iterate(change.key)) {
+        const invoice = cursor.value;
+        if (invoice.customerId === customer.id) {
+          invoice.customer = customer;
+          cursor.update(invoice);
+        }
+      }
+    }
+  }
+});
+```
+
+This feature is great when you need to:
+
+- apply some filters on an aggregation of multiple object stores (no need to compute the JOIN in memory, and then apply the filters)
+- compute statistics over historical data (as the data is computed incrementally)
+
 
 ## Disclaimer
 
@@ -518,6 +579,59 @@ onBeforeUnmount(() => {
 });
 </script>
 ```
+
+### `createComputedStore()`
+
+Arguments:
+
+- `db`: the database object
+- `computedStoreName`: the name of the computed store
+- `mainStoreName`: the name of main source store (used to init the computed store)
+- `secondaryStoreNames`: the names of any additional source stores
+- `onChange`: the handler for the change
+  - `tx`: the transaction
+  - `change`: the change (fields: `storeName`, `operation`, `key`, `value`)
+
+Example:
+
+```js
+import { openDB, createComputedStore } from 'synceddb/with-async-ittr';
+
+const db = await openDB('my awesome database');
+
+await createComputedStore(db, 'invoices-with-customer', 'invoices', ['customers'], async (tx, change) => {
+  const computedStore = tx.objectStore('invoices-with-customer');
+
+  if (change.storeName === 'invoices') {
+    if (change.operation === 'add' || change.operation === 'put') {
+      const invoice = change.value;
+      // fetch the customer object
+      invoice.customer = await tx.objectStore('customers').get(invoice.customerId);
+      // update the computed store
+      computedStore.put(invoice);
+    } else { // change.operation === 'delete'
+      computedStore.delete(change.key);
+    }
+  }
+
+  if (change.storeName === 'customers') {
+    if (change.operation === 'put') {
+      const customer = change.value;
+      // update all invoices with the given customer in the computed store
+      for await (const cursor of computedStore.index('by-customer').iterate(change.key)) {
+        const invoice = cursor.value;
+        if (invoice.customerId === customer.id) {
+          invoice.customer = customer;
+          cursor.update(invoice);
+        }
+      }
+    }
+  }
+});
+```
+
+In the example above, the `invoices-with-customer` store will be updated every time the `invoices` or the `customers` store is updated, either by a manual update from the user or when fetching updates from the server.
+
 
 ## Expectations for the REST API
 

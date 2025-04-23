@@ -196,7 +196,7 @@ suite.only('SyncManager', () => {
       });
 
       manager.start();
-      await waitForFetchSuccess(manager, 2);
+      await waitForFetchSuccess(manager, 3);
 
       const product = await db.get('products', '123');
 

@@ -296,7 +296,7 @@ manager.start();
 
 A function that allows to override the query params of the fetch requests.
 
-Defaults to `?sort=updated_at:asc&size=100&after=2000-01-01T00:00:00.000Z,123`.
+Defaults to `?sort=updated_at:asc&size=100&after=2000-01-01T00:00:00.000Z&after_id=123`.
 
 ```js
 import { openDB, SyncManager } from 'synceddb';
@@ -305,11 +305,12 @@ const db = await openDB('my-awesome-database');
 const manager = new SyncManager(db, 'https://example.com', {
   buildFetchParams: (storeName, offset) => {
     const searchParams = new URLSearchParams({
-      sort: '+updatedAt',
-      size: '10',
+      sort: 'updated_at:asc',
+      size: '100',
     });
     if (offset) {
-      searchParams.append('after', `${offset.updatedAt}+${offset.id}`);
+      searchParams.append('after', offset.updatedAt);
+      searchParams.append('after_id', offset.id.toString());
     }
     return searchParams;
   }
